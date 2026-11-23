@@ -1,23 +1,25 @@
 import java.time.LocalDate
 
-object Main {
-  def main(args: Array[String]): Unit = {
+object Main:
 
-    val entry = DevLogEntry.create(
-      "Learning Scala",
-      "Understanding companion objects",
-      LocalDate.now()
-    )
+  def main(args: Array[String]): Unit =
 
-    val updated = entry.addTag("Scala")
+    try
+      println("Starting")
 
-    assert(entry.title == "Learning Scala")
-    assert(entry.description == "Understanding companion objects")
-    assert(entry.tags.isEmpty)
+      val entry = DevLogEntry.create(
+        title = "",
+        description = "Understanding exception handling",
+        date = LocalDate.now()
+      )
 
-    assert(updated.tags == Set("Scala"))
-    assert(entry.tags.isEmpty)
+      println(s"Entry created: ${entry.title}")
 
-    println("All assertions passed!")
-  }
-}
+    catch
+      case e: IllegalArgumentException =>
+        println(s"Validation failed: ${e.getMessage}")
+
+    finally
+      println("Final block")
+
+    println("Program continues")

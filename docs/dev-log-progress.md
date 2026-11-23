@@ -2,7 +2,7 @@
 
 **Project:** `dev-log`  
 **Language:** Scala 3  
-**Last updated:** 18 November 2026  
+**Last updated:** 23 November 2026  
 **Purpose:** Build a useful development log while learning Scala design and experimenting with human–AI pair programming.
 
 ## 1. Our development approach
@@ -465,29 +465,206 @@ feat: add companion factory for dev log entries
 
 Only record this as committed and pushed after Git confirms it. The earlier Exercise 2 commit is still unconfirmed in the supplied notes; verify Git history rather than assuming it was pushed.
 
-## 9. Next exercise — validate a Dev Log title (not started)
+## 9. Exercise 4 — class invariants with `require` and exception handling (implemented; invalid-title path verified)
 
-**Candidate goal:** Prevent creation of a `DevLogEntry` with a blank title regardless of whether callers use `DevLogEntry(...)`, `DevLogEntry.create(...)`, or `entry.copy(...)`.
+**Date reviewed:** 23 November 2026  
+**Code review:** The supplied `DevLogEntry.scala` and `Main.scala` were reviewed in chat.  
+**Local verification:** **Confirmed by my `sbt run` output** for an empty title through `DevLogEntry.create`.  
+**Not yet verified by execution in this exercise:** valid titles, whitespace-only titles, invalid `copy()` and direct `apply()` calls.  
+**Commit/push:** Suggested below; not confirmed.
 
-Before writing code, decide what counts as invalid (`""`, spaces, etc.), whether the API should **throw** (`require`) or **return a value describing failure** (`Either`), and where the invariant should be enforced. Keep this next exercise small and avoid adding rules that have not yet been discussed.
+### Goal and rule
 
-### Documentation
+Prevent successfully constructing a `DevLogEntry` whose `title` is empty or contains only ordinary spaces. The rule should apply across construction routes, not just the custom companion factory.
 
-- [Scala 3 Book — Case Classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes) — constructing and copying case-class values.
-- [Scala 3 Book — Companion Objects](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#companion-objects) — factory methods versus construction paths.
-- [Scala Standard Library — Predef.require](https://www.scala-lang.org/api/3.x/scala/Predef$.html) — assertions for conditions that callers must meet; inspect the `require` methods.
+My implementation places this expression **inside the case-class body**, outside any method:
 
-**What to look for:** Ask whether a rule written only in `create` would still run when a caller writes `DevLogEntry(...)` or `entry.copy(...)`.
+```scala
+require(title.trim.nonEmpty, "Title must not be empty")
+```
 
-## 10. Official Scala documentation — quick reference
+The chain works as follows:
+
+| Part | Purpose |
+| --- | --- |
+| `title` | The input field being checked |
+| `.trim` | Removes leading/trailing whitespace (including normal spaces) |
+| `.nonEmpty` | Produces `Boolean`; `false` for an empty trimmed result |
+| `require(condition, message)` | Allows construction to continue if `true`; throws `IllegalArgumentException` if `false` |
+
+**Design decision:** This is a **class invariant** — every successfully constructed `DevLogEntry` has a title satisfying the rule. Other fields have **not** been given new validation rules. In particular, an empty `tags` set remains intentional because our `create()` factory starts entries without tags.
+
+### Submitted implementation — `DevLogEntry.scala`
+
+```scala
+import java.time.LocalDate
+
+case class DevLogEntry(
+    title: String,
+    description: String,
+    date: LocalDate,
+    tags: Set[String]
+):
+  // This is class-body code, executed during construction.
+  require(title.trim.nonEmpty, "Title must not be empty")
+
+  def addTag(newTag: String): DevLogEntry =
+    copy(tags = tags + newTag)
+
+  def removeTag(tag: String): DevLogEntry =
+    copy(tags = tags - tag)
+
+object DevLogEntry:
+  def create(
+      title: String,
+      description: String,
+      date: LocalDate
+  ): DevLogEntry =
+    DevLogEntry(title, description, date, Set.empty[String])
+```
+
+This snippet reformats indentation for the note; it does not change the behaviour of my submitted code.
+
+### Why the class body, not `apply()`?
+
+I initially considered overriding or redefining the companion object's generated `apply()`. The key distinction discovered through a `println` experiment was:
+
+- `DevLogEntry(...)` calls the case-class construction path.
+- `DevLogEntry.create(...)` delegates to `DevLogEntry(...)` in my factory.
+- `entry.copy(...)` constructs a **new** case-class instance rather than modifying the original; it does not have to call the companion object's `apply()`.
+- Code in the **class body** executes as each new instance is initialised, so the invariant covers these construction paths.
+
+**Important:** `apply()` is a way to construct the value, but it is not the single validation boundary for all new instances. We did **not** override `apply()`.
+
+### `Predef`, overloaded `require`, and `final def`
+
+I read [Scala 3 API — `Predef`](https://www.scala-lang.org/api/3.x/scala/Predef$.html) and learned:
+
+- `Predef` is a Scala standard-library singleton object whose members are automatically imported in normal Scala source files. `println(...)` and `Predef.println(...)` normally call the same method; likewise for `require(...)`.
+- There is an overload `require(requirement: Boolean)` and another that takes a message, `require(requirement: Boolean, message: => Any)`. I used the **two-argument** form.
+- `final def` means the method cannot be overridden. It does **not** mean it must be called last, and it is not the reason the message overload exists.
+- The `=> Any` message parameter is **by-name**. Its expression need not be evaluated unless it is needed for a failed requirement; deeper details can wait.
+
+### Submitted experiment — `Main.scala`
+
+```scala
+import java.time.LocalDate
+
+object Main:
+  def main(args: Array[String]): Unit =
+    try
+      println("Starting")
+
+      val entry = DevLogEntry.create(
+        title = "",
+        description = "Understanding exception handling",
+        date = LocalDate.now()
+      )
+
+      println(s"Entry created: ${entry.title}")
+
+    catch
+      case e: IllegalArgumentException =>
+        println(s"Validation failed: ${e.getMessage}")
+
+    finally
+      println("Final block")
+
+    println("Program continues")
+```
+
+### Verified local output — `sbt run` (23 November 2026)
+
+```text
+Starting
+Validation failed: requirement failed: Title must not be empty
+Final block
+Program continues
+```
+
+**What this confirms:**
+
+1. `Starting` prints before constructing the entry.
+2. The empty title fails `require(...)` and throws `IllegalArgumentException`.
+3. `catch` matches that exception and prints its `.getMessage`; `require`'s standard exception message includes the prefix `requirement failed:`.
+4. `println(s"Entry created: ...")` does **not** run because the value was not successfully constructed.
+5. `finally` runs when leaving the `try`/`catch`.
+6. Because the exception was handled, execution continues to `Program continues`.
+
+**A key distinction:** `finally` is not the same thing as `catch`. Catching handles a matching exception; `finally` is useful for cleanup that should occur when leaving the `try`/`catch` whether the operation succeeds or fails. For this learning example, it simply prints. Production code generally should not add a `try/catch` around every `require()` or use `finally` for normal success messages.
+
+### Predictions made during the exercise
+
+- An invalid `entry.copy(title = "")` should throw `IllegalArgumentException`; the original immutable entry remains unchanged. **Reasoned through, but not separately executed in the latest submitted `Main.scala`.**
+- An unhandled exception would stop normal execution at the failed line; later statements would not run.
+- A valid `DevLogEntry.create(title = "Learning Scala", ...)` should skip `catch`, execute `finally`, and continue. **Predicted, not shown in the verified output above.**
+
+### Must know / Good to know / Revisit later
+
+**Must know**
+
+- `require()` checks a **Boolean** and throws `IllegalArgumentException` on failure.
+- Case-class **class-body** code runs during instance construction; it is the right location for this rule.
+- `copy()` creates a new instance and leaves the original unchanged.
+- `try` contains code that might throw, `catch` handles matching exceptions, and `finally` executes as control leaves `try`/`catch` under normal exception handling.
+- If a matching `catch` handles the exception, execution can continue after the `try`/`catch`/`finally` statement.
+
+**Good to know**
+
+- `Predef` supplies commonly used automatically imported methods, including `require`, `assert` and `println`.
+- `require(condition, message)` has a message overload; Scala documentation marks that overload `final def` (not overridable).
+- A helpful error message is better than a vague message such as `"empty string"`.
+- `e.getMessage` can show the specific reason for a caught exception.
+- An invariant inside a class is different from validation performed only in an optional factory method.
+
+**Revisit later**
+
+- A dedicated test suite for invalid titles created by `apply()`, `create()` and `copy()`, plus a successful valid-title case.
+- Difference between `require` (invalid arguments), `assert` (internal assumptions), and `ensuring` (postconditions).
+- `Try` / `Success` / `Failure`, `Either`, and modelling expected input-validation failures without exceptions.
+- When catching `IllegalArgumentException` is appropriate at an application boundary.
+- By-name parameters (`=> Any`) in more depth, and why `finally` is typically used for resource cleanup.
+
+### Related official documentation
+
+- [Scala API — `Predef` (`require`, `assert`, `println`)](https://www.scala-lang.org/api/3.x/scala/Predef$.html) — method signatures and error behaviour.  
+  **What to look for:** Two `require` overloads, their parameter lists, `final def`, and the return type `Unit`.
+- [Scala 3 Book — Classes: fields and methods](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#fields-and-methods) — class-body statements and initialisation.  
+  **What to look for:** The `println("initialization begins")` example, and when it executes.
+- [Scala 3 Book — Case classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes) — generated methods and `copy()`.  
+  **What to look for:** Why `copy()` creates a new case-class instance rather than changing an existing one.
+- [Scala 3 Book — `try` / `catch` / `finally`](https://docs.scala-lang.org/scala3/book/control-structures.html#try-catch-finally) — exception handling.  
+  **What to look for:** The order of statements when an exception is thrown and caught, and what `finally` does.
+
+### Commit milestone
+
+Suggested commit message (do not mark as committed/pushed until Git confirms it):
+
+```text
+feat: validate dev log titles with require
+```
+
+Stage `src/main/scala/DevLogEntry.scala`, `src/main/scala/Main.scala`, and `docs/dev-log-progress.md` for this milestone. Earlier Exercises 2 and 3 have historical commit suggestions in this note; their Git status still needs checking against actual repository history.
+
+## 10. Next small exercise — cover the validation paths (not yet completed)
+
+Use small checks to verify a **valid** entry and invalid titles through `create`, direct `DevLogEntry(...)` and `copy`. Keep the same invariant, and avoid adding unrelated rules. After the behaviour is confirmed, consider introducing a proper test suite or exploring when validation should produce an `Either` instead of throwing an exception.
+
+**Documentation:** [Scala 3 Book — Case classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes); [Scala 3 Book — Building and testing with sbt](https://docs.scala-lang.org/scala3/book/tools-sbt.html).
+
+**What to look for:** Does each construction route honour the invariant? How does a test express an *expected* exception instead of accidentally failing the whole program?
+
+## 11. Official Scala documentation — quick reference
 
 - [Scala 3 Book — Case Classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes)
 - [Scala 3 Book — Methods](https://docs.scala-lang.org/scala3/book/taste-methods.html)
 - [Scala 3 Book — Singleton Objects](https://docs.scala-lang.org/scala3/book/taste-objects.html)
 - [Scala 3 Book — Collections](https://docs.scala-lang.org/scala3/book/collections-classes.html)
+- [Scala 3 Book — Control Structures](https://docs.scala-lang.org/scala3/book/control-structures.html)
+- [Scala 3 API — `Predef`](https://www.scala-lang.org/api/3.x/scala/Predef$.html)
 
-**How to use these docs:** The links above each exercise are the starting point. Read only enough to answer that exercise's question, then use this list as a wider reference. When we add a future exercise, record its direct documentation links and “What to look for” note alongside its implementation.
+**How to use these docs:** Begin with the direct documentation links and “What to look for” prompts for the current exercise. Return to this quick list for broader reference.
 
 ---
 
-**Current position (18 November 2026):** Scala project set up and initially pushed; `addTag`/`removeTag` implemented; Exercise 3 companion-object `create` and its expanded assertions reviewed. Local `sbt run` and Exercise 3 commit/push remain unconfirmed. Next candidate exercise: enforcing a nonblank title across all construction paths.
+**Current position (23 November 2026):** The Scala 3 model, immutable tag operations and companion `create()` factory are implemented. Exercise 4 adds the class-body `require` title invariant; the empty-title `create()` example and the resulting `try`/`catch`/`finally` flow were verified locally with `sbt run`. Other validation paths remain to be tested. This note records a **suggested** Git commit, not a confirmed commit or push.

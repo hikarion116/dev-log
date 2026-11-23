@@ -7,10 +7,23 @@ case class DevLogEntry(
                         tags: Set[String]
                       ):
 
-  def addTag(newTag: String): DevLogEntry = this.copy(tags = this.tags + newTag)
+  // Validate when a new instance is created
+  require(title.trim.nonEmpty, "Title must not be empty")
 
-  def removeTag(tag: String): DevLogEntry = this.copy(tags = this.tags - tag)
+  // Return a new instance with an additional tag
+  def addTag(newTag: String): DevLogEntry =
+    copy(tags = tags + newTag)
+
+  // Return a new instance with the tag removed
+  def removeTag(tag: String): DevLogEntry =
+    copy(tags = tags - tag)
+
 
 object DevLogEntry:
-  def create(title: String, description: String, date: LocalDate): DevLogEntry =
+
+  def create(
+              title: String,
+              description: String,
+              date: LocalDate
+            ): DevLogEntry =
     DevLogEntry(title, description, date, Set.empty[String])
