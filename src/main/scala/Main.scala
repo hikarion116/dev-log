@@ -1,25 +1,45 @@
 import java.time.LocalDate
 
 object Main:
-
   def main(args: Array[String]): Unit =
 
-    try
-      println("Starting")
+    val entry = DevLogEntry.create(
+      "Learning Scala",
+      "Testing validation",
+      LocalDate.now()
+    )
 
-      val entry = DevLogEntry.create(
-        title = "",
-        description = "Understanding exception handling",
-        date = LocalDate.now()
-      )
+    // 1. Valid entry
+    assert(entry.title == "Learning Scala")
 
-      println(s"Entry created: ${entry.title}")
-
+    // 2. Empty title
+    val emptyTitleThrows = try
+      DevLogEntry.create("", "Testing", LocalDate.now())
+      false
     catch
-      case e: IllegalArgumentException =>
-        println(s"Validation failed: ${e.getMessage}")
+      case _: IllegalArgumentException => true
 
-    finally
-      println("Final block")
+    assert(emptyTitleThrows)
 
-    println("Program continues")
+    // 3. Whitespace-only title
+    val whitespaceThrows = try
+      DevLogEntry.create("   ", "Testing", LocalDate.now())
+      false
+    catch
+      case _: IllegalArgumentException => true
+
+    assert(whitespaceThrows)
+
+    // 4. Invalid copy
+    val copyThrows = try
+      entry.copy(title = "")
+      false
+    catch
+      case _: IllegalArgumentException => true
+
+    assert(copyThrows)
+
+    // Original entry remains unchanged
+    assert(entry.title == "Learning Scala")
+
+    println("All assertions passed!")

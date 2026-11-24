@@ -2,7 +2,7 @@
 
 **Project:** `dev-log`  
 **Language:** Scala 3  
-**Last updated:** 23 November 2026  
+**Last updated:** 24 November 2026  
 **Purpose:** Build a useful development log while learning Scala design and experimenting with human–AI pair programming.
 
 ## 1. Our development approach
@@ -34,9 +34,9 @@ We will return to these questions as the application develops rather than treati
 
 - Created the GitHub repository `dev-log` and opened the local directory with IntelliJ IDEA.
 - Learned that `../.idea` is IntelliJ's project configuration directory, not application source code.
-- Set up a simple **sbt + Scala 3** console application. Our original setup used `scalaVersion := "3.9.0"` in `../build.sbt` and `sbt.version=2.0.11` in `project/build.properties` (these were the versions used in the setup exercise; check the files for their current values).
+- Set up a simple **sbt + Scala 3** console application. Our original setup used `scalaVersion := "3.9.0"` in `../build.sbt` and `sbt.version=2.0.11` in `../project/build.properties` (these were the versions used in the setup exercise; check the files for their current values).
 - Created `../src/main/scala/Main.scala` and successfully ran `sbt run`, which printed `Dev Log started`.
-- Learned that sbt / IntelliJ may create generated directories such as `../project/project`, `target/` and `.bsp/`. They are not where application code goes.
+- Learned that sbt / IntelliJ may create generated directories such as `../project/project`, `../target` and `.bsp/`. They are not where application code goes.
 - Added `../.gitignore` to exclude local IDE settings and generated build outputs.
 - Committed and pushed the initial setup:
 
@@ -67,7 +67,7 @@ The `../src/test/scala` directory can be added or used when we begin unit testin
 - [The Book of sbt — Getting Started](https://www.scala-sbt.org/2.x/docs/en/guide/index.html) — sbt project structure, build definitions and commands.
 - [Scala 3 Book — Main Methods](https://docs.scala-lang.org/scala3/book/methods-main-methods.html) — how a Scala program starts.
 
-**What to look for:** How `build.sbt`, `project/build.properties` and the application's entry point have different jobs.
+**What to look for:** How `../build.sbt`, `project/build.properties` and the application's entry point have different jobs.
 
 ## 3. First data model — completed
 
@@ -644,17 +644,121 @@ Suggested commit message (do not mark as committed/pushed until Git confirms it)
 feat: validate dev log titles with require
 ```
 
-Stage `src/main/scala/DevLogEntry.scala`, `src/main/scala/Main.scala`, and `docs/dev-log-progress.md` for this milestone. Earlier Exercises 2 and 3 have historical commit suggestions in this note; their Git status still needs checking against actual repository history.
+Stage `../src/main/scala/DevLogEntry.scala`, `src/main/scala/Main.scala`, and `docs/dev-log-progress.md` for this milestone. Earlier Exercises 2 and 3 have historical commit suggestions in this note; their Git status still needs checking against actual repository history.
 
-## 10. Next small exercise — cover the validation paths (not yet completed)
+## 10. Exercise 5 — assert an expected exception using a Boolean `try/catch` expression (code prepared and reviewed)
 
-Use small checks to verify a **valid** entry and invalid titles through `create`, direct `DevLogEntry(...)` and `copy`. Keep the same invariant, and avoid adding unrelated rules. After the behaviour is confirmed, consider introducing a proper test suite or exploring when validation should produce an `Either` instead of throwing an exception.
+**Date:** 24 November 2026  
+**Status:** The `Main.scala` example was supplied in the 24 November upload and reviewed against the existing title invariant. **A local `sbt run` result was not supplied for this version**, so its execution remains unverified.  
+**Scope:** A short learning exercise, not a new production feature or a dedicated test suite.
 
-**Documentation:** [Scala 3 Book — Case classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes); [Scala 3 Book — Building and testing with sbt](https://docs.scala-lang.org/scala3/book/tools-sbt.html).
+### The useful discovery
 
-**What to look for:** Does each construction route honour the invariant? How does a test express an *expected* exception instead of accidentally failing the whole program?
+Previously, the exercise used `try/catch` only to print an exception. Today I learned that **Scala's `try/catch` is an expression that returns a value**. That lets me store the outcome as a `Boolean`, then verify the expected exception using `assert`.
 
-## 11. Official Scala documentation — quick reference
+```scala
+val emptyTitleThrows = try
+  DevLogEntry.create("", "Testing", LocalDate.now())
+  false
+catch
+  case _: IllegalArgumentException => true
+
+assert(emptyTitleThrows)
+```
+
+- **If construction succeeds**, execution reaches `false`. The assertion then fails: the expected exception did not happen.
+- **If construction throws `IllegalArgumentException`**, the matching `catch` evaluates to `true`, so the assertion passes.
+- **If another exception occurs**, this `catch` does not handle it; it propagates rather than being mistaken for a successful test.
+- Scala infers `emptyTitleThrows: Boolean` because the normal and caught paths both produce a Boolean.
+- `_` in the `catch` pattern means the exception is matched by type but its value is not needed.
+
+**Key takeaway:** A `try/catch` can be used to *produce a value*, not just perform side effects. The `false` after the constructor is important: it marks an unexpected success as a failed check.
+
+### Submitted `Main.scala`
+
+The uploaded code checks a valid entry, an empty title, a whitespace-only title, and an invalid `copy`. It also checks that the original entry remains unchanged.
+
+```scala
+import java.time.LocalDate
+
+object Main:
+  def main(args: Array[String]): Unit =
+
+    val entry = DevLogEntry.create(
+      "Learning Scala",
+      "Testing validation",
+      LocalDate.now()
+    )
+
+    // 1. Valid entry
+    assert(entry.title == "Learning Scala")
+
+    // 2. Empty title
+    val emptyTitleThrows = try
+      DevLogEntry.create("", "Testing", LocalDate.now())
+      false
+    catch
+      case _: IllegalArgumentException => true
+
+    assert(emptyTitleThrows)
+
+    // 3. Whitespace-only title
+    val whitespaceThrows = try
+      DevLogEntry.create("   ", "Testing", LocalDate.now())
+      false
+    catch
+      case _: IllegalArgumentException => true
+
+    assert(whitespaceThrows)
+
+    // 4. Invalid copy
+    val copyThrows = try
+      entry.copy(title = "")
+      false
+    catch
+      case _: IllegalArgumentException => true
+
+    assert(copyThrows)
+
+    // Original entry remains unchanged
+    assert(entry.title == "Learning Scala")
+
+    println("All assertions passed!")
+```
+
+**Verification boundary:** The example is consistent with our existing `require(title.trim.nonEmpty, ...)` rule, but the latest uploaded `Main.scala` has not been accompanied by an execution result. It does **not** separately check direct `DevLogEntry(...)` construction, and no new testing library has been introduced.
+
+### Must know / Good to know / Revisit later
+
+- **Must know:** `try/catch` returns the value of the completed `try` block or the matching `catch` branch; `assert` checks the resulting Boolean.
+- **Good to know:** An unexpected exception type propagates; `case _: IllegalArgumentException` matches without binding the exception; `assert` can detect when an expected exception never occurred.
+- **Revisit later:** `Try`, `Success`, `Failure`; unit-testing frameworks and `sbt test`; direct `apply` checks if they become useful. No need to rewrite near-identical examples just for repetition.
+
+### Learning approach refined today
+
+Because this learning happens after work, spend hands-on time on **genuinely new insights or design questions**. For very similar cases, provide complete code and explain only what is new. Keep the Dev Log moving without treating repetitive typing as progress.
+
+### Documentation
+
+- [Scala 3 Book — `try` / `catch` / `finally`](https://docs.scala-lang.org/scala3/book/control-structures.html#try-catch-finally) — **What to look for:** how `try/catch` forms an expression whose branches return values.
+- [Scala API — `Predef.assert`](https://www.scala-lang.org/api/3.x/scala/Predef$.html) — **What to look for:** what happens when an assertion condition is false.
+- [Scala 3 Book — Building and Testing with sbt](https://docs.scala-lang.org/scala3/book/tools-sbt.html) — **Read later:** how to organise tests outside `Main.scala` and run them using `sbt test`.
+
+### Suggested Git milestone
+
+```text
+test: check title validation with try-catch assertions
+```
+
+Commit the updated `../src/main/scala/Main.scala` and `docs/dev-log-progress.md` after local review/verification. Do not record a push or successful run until it is confirmed.
+
+## 11. Next learning direction — not started
+
+Move on to a new concept rather than repeating these checks. A natural candidate is **`Try`, `Success`, and `Failure`**, comparing failures represented as values with the current `try/catch` expression. The dedicated sbt test suite can wait until it becomes useful for the application.
+
+- [Scala API — `Try`](https://www.scala-lang.org/api/3.x/scala/util/Try.html) — **What to look for:** `Try.apply`, `Success`, and `Failure`, and which exceptions are caught.
+
+## 12. Official Scala documentation — quick reference
 
 - [Scala 3 Book — Case Classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes)
 - [Scala 3 Book — Methods](https://docs.scala-lang.org/scala3/book/taste-methods.html)
@@ -667,4 +771,4 @@ Use small checks to verify a **valid** entry and invalid titles through `create`
 
 ---
 
-**Current position (23 November 2026):** The Scala 3 model, immutable tag operations and companion `create()` factory are implemented. Exercise 4 adds the class-body `require` title invariant; the empty-title `create()` example and the resulting `try`/`catch`/`finally` flow were verified locally with `sbt run`. Other validation paths remain to be tested. This note records a **suggested** Git commit, not a confirmed commit or push.
+**Current position (24 November 2026):** The Scala 3 model, immutable tag operations and companion `create()` factory are implemented. Exercise 4 introduced the title invariant and verified the invalid-title exception flow locally on 23 November. Exercise 5 adds a supplied `Main.scala` example showing how `try/catch` returns a Boolean that `assert` can check, including whitespace and invalid-copy cases. This latest version has been reviewed but **not confirmed executed**. Next concept: `Try` / `Success` / `Failure`; sbt-based unit tests can be studied later. Commit and push status for Exercise 5 remain unconfirmed.
