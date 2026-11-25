@@ -5,465 +5,121 @@
 **Last updated:** 24 November 2026  
 **Purpose:** Build a useful development log while learning Scala design and experimenting with human–AI pair programming.
 
-## 1. Our development approach
+**Reading order:** Newest learning entries first. Insert future learning entries directly above the most recent learning entry, keep the current-position summary and next learning direction at the top, and preserve older entries below. The original section numbers are retained as historical identifiers, not reading order.
 
-This project is both an application and a learning experiment. I write and run the code; AI helps me reason about design, review decisions and explore alternatives. Initially, AI does not need terminal access.
+**Current position (24 November 2026):** The Scala 3 model, immutable tag operations and companion `create()` factory are implemented. Exercise 4 introduced the title invariant and verified the invalid-title exception flow locally on 23 November. Exercise 5 adds a supplied `Main.scala` example showing how `try/catch` returns a Boolean that `assert` can check, including whitespace and invalid-copy cases. This latest version has been reviewed but **not confirmed executed**. Next concept: `Try` / `Success` / `Failure`; sbt-based unit tests can be studied later. Commit and push status for Exercise 5 remain unconfirmed.
 
-For each small feature, follow this cycle:
+## 11. Next learning direction — not started
 
-1. Define the problem and its requirements.
-2. Think about the design before coding.
-3. Implement it myself.
-4. Test and review it, comparing alternatives.
-5. Commit a meaningful milestone and record what I learned.
+Move on to a new concept rather than repeating these checks. A natural candidate is **`Try`, `Success`, and `Failure`**, comparing failures represented as values with the current `try/catch` expression. The dedicated sbt test suite can wait until it becomes useful for the application.
 
-For **every exercise**, keep the relevant documentation links next to the exercise (not only in a reference list at the end). Include a brief **“What to look for”** note so I can return to the source and find the concept independently. Prefer the official Scala 3 Book and link to a specific section whenever possible; use official tool documentation for setup exercises. Only record an implementation as complete after I have written and checked it. Distinguish a code-review pass from a build or test run that has been verified locally.
+- [Scala API — `Try`](https://www.scala-lang.org/api/3.x/scala/util/Try.html) — **What to look for:** `Try.apply`, `Success`, and `Failure`, and which exceptions are caught.
 
-We use four recurring design questions:
+## 10. Exercise 5 — assert an expected exception using a Boolean `try/catch` expression (code prepared and reviewed)
 
-| Foundation | Question |
-| --- | --- |
-| **Case class vs class** | How should we model data? |
-| **Object vs class** | Where should behaviour live? |
-| **Trait vs inheritance/composition** | How do we design for change? |
-| **Collections** | How should we organise data? |
+**Date:** 24 November 2026  
+**Status:** The `Main.scala` example was supplied in the 24 November upload and reviewed against the existing title invariant. **A local `sbt run` result was not supplied for this version**, so its execution remains unverified.  
+**Scope:** A short learning exercise, not a new production feature or a dedicated test suite.
 
-We will return to these questions as the application develops rather than treating them as isolated lessons.
+### The useful discovery
 
-## 2. Project setup — completed
+Previously, the exercise used `try/catch` only to print an exception. Today I learned that **Scala's `try/catch` is an expression that returns a value**. That lets me store the outcome as a `Boolean`, then verify the expected exception using `assert`.
 
-- Created the GitHub repository `dev-log` and opened the local directory with IntelliJ IDEA.
-- Learned that `../.idea` is IntelliJ's project configuration directory, not application source code.
-- Set up a simple **sbt + Scala 3** console application. Our original setup used `scalaVersion := "3.9.0"` in `../build.sbt` and `sbt.version=2.0.11` in `../project/build.properties` (these were the versions used in the setup exercise; check the files for their current values).
-- Created `../src/main/scala/Main.scala` and successfully ran `sbt run`, which printed `Dev Log started`.
-- Learned that sbt / IntelliJ may create generated directories such as `../project/project`, `../target` and `.bsp/`. They are not where application code goes.
-- Added `../.gitignore` to exclude local IDE settings and generated build outputs.
-- Committed and pushed the initial setup:
+```scala
+val emptyTitleThrows = try
+  DevLogEntry.create("", "Testing", LocalDate.now())
+  false
+catch
+  case _: IllegalArgumentException => true
 
-```text
-chore: initialise Scala dev log project
+assert(emptyTitleThrows)
 ```
 
-Key files:
+- **If construction succeeds**, execution reaches `false`. The assertion then fails: the expected exception did not happen.
+- **If construction throws `IllegalArgumentException`**, the matching `catch` evaluates to `true`, so the assertion passes.
+- **If another exception occurs**, this `catch` does not handle it; it propagates rather than being mistaken for a successful test.
+- Scala infers `emptyTitleThrows: Boolean` because the normal and caught paths both produce a Boolean.
+- `_` in the `catch` pattern means the exception is matched by type but its value is not needed.
 
-```text
-dev-log/
-├── .gitignore
-├── build.sbt
-├── project/
-│   └── build.properties
-└── src/
-    └── main/
-        └── scala/
-            ├── Main.scala
-            ├── DevLogEntry.scala
-            └── DevLogService.scala
-```
+**Key takeaway:** A `try/catch` can be used to *produce a value*, not just perform side effects. The `false` after the constructor is important: it marks an unexpected success as a failed check.
 
-The `../src/test/scala` directory can be added or used when we begin unit testing. Empty directories do not appear in Git commits.
+### Submitted `Main.scala`
 
-### Related documentation
-
-- [The Book of sbt — Getting Started](https://www.scala-sbt.org/2.x/docs/en/guide/index.html) — sbt project structure, build definitions and commands.
-- [Scala 3 Book — Main Methods](https://docs.scala-lang.org/scala3/book/methods-main-methods.html) — how a Scala program starts.
-
-**What to look for:** How `../build.sbt`, `project/build.properties` and the application's entry point have different jobs.
-
-## 3. First data model — completed
-
-Created `DevLogEntry.scala`:
+The uploaded code checks a valid entry, an empty title, a whitespace-only title, and an invalid `copy`. It also checks that the original entry remains unchanged.
 
 ```scala
 import java.time.LocalDate
 
-case class DevLogEntry(
-    title: String,
-    description: String,
-    date: LocalDate,
-    tags: Set[String]
-)
-```
+object Main:
+  def main(args: Array[String]): Unit =
 
-This describes a development-log entry using four fields:
-
-- `title` and `description`: `String`
-- `date`: `LocalDate`, rather than an arbitrary date string
-- `tags`: immutable `Set[String]`, which prevents duplicate values
-
-We created entries in `Main.scala`, printed them, and used Git to push the initial model. The commit was:
-
-```text
-feat: add initial dev log entry model
-```
-
-We also tested working with the repository across two Macs.
-
-### Why a case class?
-
-A case class is a useful default for this value-oriented model because it provides:
-
-1. Construction without `new`.
-2. Equality based on constructor field values.
-3. Immutable constructor fields (`val`) by default.
-4. `copy()` to create modified instances.
-5. Readable `toString` output.
-
-A regular `class` can be appropriate for other kinds of objects, but these features are not all supplied automatically in the same way.
-
-**Important future distinction:** Two entries with identical fields compare equal as case-class values, but they might eventually be two distinct saved records. We will revisit **value equality vs record identity** when introducing IDs and persistence.
-
-### Related documentation
-
-- [Scala 3 Book — Case Classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes) — generated methods, equality, `copy()` and constructor fields.
-- [Scala 3 Book — Working with Sets](https://docs.scala-lang.org/scala3/book/collections-classes.html#working-with-sets) — why `Set` stores unique elements.
-
-**What to look for:** Identify which case-class features Scala generates for us, and why `tags` is a `Set[String]` rather than a `List[String]`.
-
-## 4. Immutability and `copy()` — completed experiment
-
-We experimented with:
-
-```scala
-val updatedEntry = entry.copy(
-  tags = entry.tags + "GitHub"
-)
-```
-
-Correct predictions:
-
-- `entry.tags` stays unchanged.
-- `updatedEntry.tags` includes the extra tag.
-- `entry == updatedEntry` is `false` when their tags differ.
-
-**Lesson:** Immutability does not mean the application cannot represent changes. Instead of changing an existing value, we create a new value with the updated state.
-
-**`val` clarification (17 November 2026):** `val entry` prevents assigning a different value to the variable `entry`, but `val` alone does not make a referenced object deeply immutable. Here, case-class parameters are `val` by default, `tags` is an immutable `Set[String]`, and `copy()` creates a new entry rather than changing the existing one.
-
-### Related documentation
-
-- [Scala 3 Book — Immutable Values](https://docs.scala-lang.org/scala3/book/fp-immutable-values.html) — case classes and the “update as you copy” pattern.
-- [Scala 3 Book — Adding elements to a Set](https://docs.scala-lang.org/scala3/book/collections-classes.html#adding-elements-to-a-set) — returning a new immutable collection with `+`.
-
-**What to look for:** Which value is unchanged after `copy()`, and which operation produces a new `Set`?
-
-## 5. Moving behaviour into the model — implemented
-
-I implemented `addTag` inside `DevLogEntry`:
-
-```scala
-import java.time.LocalDate
-
-case class DevLogEntry(
-    title: String,
-    description: String,
-    date: LocalDate,
-    tags: Set[String]
-):
-  def addTag(newTag: String): DevLogEntry =
-    this.copy(tags = this.tags + newTag)
-```
-
-The explicit `: DevLogEntry` return type is a clarity improvement suggested during review; my original implementation relied on Scala's return-type inference.
-
-Usage:
-
-```scala
-val withGitHub = entry.addTag("GitHub")
-val stillOneGitHub = withGitHub.addTag("GitHub")
-```
-
-Because `tags` is a `Set`, adding the same string twice does not create a duplicate. The original `entry` is unchanged.
-
-### Case-class method vs service object
-
-We considered two designs:
-
-```scala
-// Approach A: behaviour on an instance
-entry.addTag("GitHub")
-
-// Approach B: behaviour in a separate singleton object
-DevLogService.addTag(entry, "GitHub")
-```
-
-An example implementation of Approach B is:
-
-```scala
-object DevLogService {
-  def addTag(entry: DevLogEntry, newTag: String): DevLogEntry =
-    entry.addTag(newTag)
-}
-```
-
-**Decision for now:** Keep simple behaviour that only transforms the entry's own data in `DevLogEntry`. A service becomes more useful when an operation coordinates external dependencies or other responsibilities, for example saving an entry to a database. Just needing a `DevLogEntry` argument does *not*, by itself, prove that the method must be on the class.
-
-**Status clarification:** `DevLogService.scala` is present in the uploaded project ZIP, and it delegates to `entry.addTag(newTag)`. We can keep it as an example of a separate singleton object, but it is not required for this simple operation.
-
-### Related documentation
-
-- [Scala 3 Book — Methods](https://docs.scala-lang.org/scala3/book/taste-methods.html) — methods inside case classes and other types.
-- [Scala 3 Book — Fields and methods](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#fields-and-methods) — instance behaviour in a class body.
-- [Scala 3 Book — Singleton Objects](https://docs.scala-lang.org/scala3/book/taste-objects.html) — the alternative of placing methods in an `object`.
-
-**What to look for:** Where a method can be declared and how an instance method differs from a method in a singleton object. Keeping `addTag` on `DevLogEntry` is **our design decision**, not a rule imposed by these docs.
-
-## 6. What to learn now vs later
-
-### Must know
-
-- What a `case class` provides automatically.
-- How value equality (`==`) works for case classes.
-- Why `copy()` plus immutable collections leaves the original unchanged.
-- How `Set` operators `+` (add) and `-` (remove) produce updated immutable collections.
-- The distinction between `val` and an immutable object or collection.
-- How simple `assert` checks verify expected behaviour and fail with `AssertionError` when a condition is false.
-- The difference between an **instance method** (`entry.addTag`) and a method on an **object** (`DevLogService.addTag`).
-- What `this` means inside an instance method.
-- The distinction between an instance method, singleton object, and companion object.
-- Why validation only inside a factory can be bypassed by another public construction path.
-
-### Good to know
-
-- Why `Set` is useful when duplicate tags are not wanted.
-- Why explicit return types improve method readability.
-- How methods can delegate to one another without duplicating logic.
-- Why behaviour working solely on an entry's data may belong on the entry itself.
-- Why a companion factory can supply default values and why constructor defaults may sometimes be simpler.
-- How Scala 3 infers a return type, and why an explicit return type on a public method can help readers.
-
-### Revisit later
-
-- Value equality vs persistent record identity and unique IDs.
-- Factories that enforce construction rules, and alternative ways of designing creation APIs.
-- Services, repositories and dependency injection.
-- Traits, composition and abstraction boundaries.
-- A dedicated test suite (for example, using a Scala testing framework) and validation rules (for example, empty titles).
-
-## 7. Exercise 2 — immutable `removeTag` and `assert` checks (completed and reviewed)
-
-**Date reviewed:** 17 November 2026  
-**Code review:** Passed; the following was supplied in chat after the ZIP upload.  
-**Verification note:** The assertions are written and reviewed, but a successful local `sbt run` has not been confirmed in chat.  
-**Commit:** Ready to make; not yet confirmed as pushed.
-
-### Problem and solution
-
-Remove a tag while preserving the original entry. A nonexistent tag should be harmless; it should leave the set's elements unchanged.
-
-```scala
-def removeTag(tag: String): DevLogEntry =
-  this.copy(tags = this.tags - tag)
-```
-
-- `tags - tag` creates a Set without the specified element; it does not modify the original immutable Set.
-- `copy(tags = ...)` creates a new `DevLogEntry` and preserves `title`, `description` and `date`.
-- Removing a missing tag returns a Set with the same elements; no `if`, `Option` or exception handling is needed for this simple case.
-- Removing the last remaining tag produces `Set.empty[String]`.
-
-`addTag` remains:
-
-```scala
-def addTag(newTag: String): DevLogEntry =
-  this.copy(tags = this.tags + newTag)
-```
-
-### Checking behaviour with `assert` in `Main.scala`
-
-The following is the test example I wrote. It checks the expected results automatically rather than relying only on printed output:
-
-```scala
-import java.time.LocalDate
-
-object Main {
-  def main(args: Array[String]): Unit = {
-    val entry = DevLogEntry(
-      title = "My First Dev Log",
-      description = "Testing development across two Macs",
-      date = LocalDate.now(),
-      tags = Set("Scala", "Git")
-    )
-
-    val updatedEntry = entry.addTag("GitHub")
-    val updated = entry.removeTag("Git")
-    val empty = updated.removeTag("Scala")
-    val unchanged = entry.removeTag("new")
-
-    // Original entry
-    assert(entry.tags == Set("Scala", "Git"))
-
-    // Add a new tag
-    assert(updatedEntry.tags == Set("Scala", "Git", "GitHub"))
-
-    // Remove an existing tag
-    assert(updated.tags == Set("Scala"))
-
-    // Remove the last tag
-    assert(empty.tags == Set.empty[String])
-
-    // Removing a missing tag preserves the value
-    assert(unchanged == entry)
-
-    // Original entry is still unchanged
-    assert(entry.tags == Set("Scala", "Git"))
-
-    println("All assertions passed!")
-  }
-}
-```
-
-### What is `assert`?
-
-`assert(condition)` verifies that a Boolean expression is `true`:
-
-```scala
-assert(updated.tags == Set("Scala"))
-```
-
-- If the condition is `true`, the program continues.
-- If it is `false`, `assert` throws an `AssertionError`; the success message at the end won't be reached.
-- These are useful **manual application checks**, not yet a dedicated automated test suite.
-- The two checks of `entry.tags` are intentionally redundant for learning: they reinforce that operations on copies have not changed the original.
-
-**Local verification to do before committing:** run `sbt run` and confirm the message `All assertions passed!` appears without errors. The chat review alone does not prove the code was executed.
-
-### Explanation in my own words
-
-> `entry.removeTag("Git")` returns a new copy with one fewer tag. The original `entry` is not modified. `val` prevents reassignment, while the immutable Set and the `copy()` operation are what give this example its immutable update behaviour.
-
-### Documentation
-
-- [Scala 3 Book — Deleting elements from a Set](https://docs.scala-lang.org/scala3/book/collections-classes.html#deleting-elements-from-a-set) — the `-` operation and Set behaviour.
-- [Scala 3 Book — Immutable Values](https://docs.scala-lang.org/scala3/book/fp-immutable-values.html) — creating updated copies without modifying the original.
-- [Scala 3 Book — Building and Testing with sbt](https://docs.scala-lang.org/scala3/book/tools-sbt.html) — examples of assertions in a test workflow and the next step beyond checks in `Main`.
-
-**What to look for:** Why `-` does not mutate an immutable Set; why `copy()` returns a new case-class instance; what `assert` does if a condition is false.
-
-### Commit milestone
-
-Planned commit message:
-
-```text
-feat: add immutable tag removal to DevLogEntry
-```
-
-Include the implementation, `Main.scala` checks and this progress note in the commit. Do not mark the commit as pushed until Git confirms it.
-
-## 8. Exercise 3 — companion-object factory and assertions (implemented and reviewed)
-
-**Date reviewed:** 18 November 2026  
-**Code review:** Passed for the submitted implementation and updated assertions.  
-**Local verification:** Not confirmed in chat; run `sbt run` and check for `All assertions passed!`.  
-**Commit/push:** Proposed below; not yet confirmed.
-
-### Problem
-
-Create a new Dev Log entry with an empty tag set without making every caller supply `Set.empty[String]`. This lets us compare methods on an existing instance with a method on its companion object.
-
-### Implementation — `DevLogEntry.scala`
-
-```scala
-import java.time.LocalDate
-
-case class DevLogEntry(
-    title: String,
-    description: String,
-    date: LocalDate,
-    tags: Set[String]
-):
-  def addTag(newTag: String): DevLogEntry =
-    this.copy(tags = this.tags + newTag)
-
-  def removeTag(tag: String): DevLogEntry =
-    this.copy(tags = this.tags - tag)
-
-object DevLogEntry:
-  def create(title: String, description: String, date: LocalDate): DevLogEntry =
-    DevLogEntry(title, description, date, Set.empty[String])
-```
-
-The implementation has an explicit `: DevLogEntry` result type. `create` is on the **companion object** (`object DevLogEntry`), while `addTag` and `removeTag` remain **instance methods**. The factory adds a convenient creation path; it does not disable the case class's generated `apply` constructor.
-
-### Checks — `Main.scala`
-
-My latest exercise solution uses:
-
-```scala
-import java.time.LocalDate
-
-object Main {
-  def main(args: Array[String]): Unit = {
     val entry = DevLogEntry.create(
       "Learning Scala",
-      "Understanding companion objects",
+      "Testing validation",
       LocalDate.now()
     )
 
-    val updated = entry.addTag("Scala")
-
+    // 1. Valid entry
     assert(entry.title == "Learning Scala")
-    assert(entry.description == "Understanding companion objects")
-    assert(entry.tags.isEmpty)
 
-    assert(updated.tags == Set("Scala"))
-    assert(entry.tags.isEmpty)
+    // 2. Empty title
+    val emptyTitleThrows = try
+      DevLogEntry.create("", "Testing", LocalDate.now())
+      false
+    catch
+      case _: IllegalArgumentException => true
+
+    assert(emptyTitleThrows)
+
+    // 3. Whitespace-only title
+    val whitespaceThrows = try
+      DevLogEntry.create("   ", "Testing", LocalDate.now())
+      false
+    catch
+      case _: IllegalArgumentException => true
+
+    assert(whitespaceThrows)
+
+    // 4. Invalid copy
+    val copyThrows = try
+      entry.copy(title = "")
+      false
+    catch
+      case _: IllegalArgumentException => true
+
+    assert(copyThrows)
+
+    // Original entry remains unchanged
+    assert(entry.title == "Learning Scala")
 
     println("All assertions passed!")
-  }
-}
 ```
 
-These checks cover the title, description, initial empty tags, successful addition of a tag, and the original entry remaining unchanged. **They do not yet explicitly assert the date**; if that becomes important, capture `LocalDate.now()` in a variable, pass it to `create`, and assert `entry.date == thatDate`. No local execution result has been reported.
-
-### Design discussion — the trade-off I noticed
-
-> If we know a new Dev Log should start with no tags, the factory saves us from repeatedly passing an empty Set. But our `create` method cannot accept initial tags, so it is less flexible for that use case.
-
-That is correct **for the current `create` signature**. Callers may still use the generated case-class constructor to supply tags directly. An alternative would be to give `tags` a default value in the case-class constructor:
-
-```scala
-case class DevLogEntry(
-    title: String,
-    description: String,
-    date: LocalDate,
-    tags: Set[String] = Set.empty[String]
-)
-```
-
-Default arguments can make the simple creation case more flexible, without a separate custom `create` method. **This was discussed as an alternative; it has not been implemented in the submitted solution.**
-
-### Design discussion — where should validation live?
-
-My answer to the follow-up design question was:
-
-> Put a rule such as "the title must not be empty" in the case class, because a caller can bypass validation in `create` by using the generated case-class `apply` method directly.
-
-This reasoning is sound. With a public case-class constructor, a check only in the factory does not protect every construction path. A possible **future exercise** is a class-body invariant using `require`, such as `require(title.trim.nonEmpty, "Title must not be empty")`, which would run when instances are constructed through the public constructor, generated `apply`, or `copy`. **No validation rule has been added yet.** We should also discuss when throwing an exception is appropriate versus returning a validation result.
+**Verification boundary:** The example is consistent with our existing `require(title.trim.nonEmpty, ...)` rule, but the latest uploaded `Main.scala` has not been accompanied by an execution result. It does **not** separately check direct `DevLogEntry(...)` construction, and no new testing library has been introduced.
 
 ### Must know / Good to know / Revisit later
 
-- **Must know:** An instance method works on one entry; a companion object is a singleton with the same name as its class, declared alongside it; the case-class constructor remains available even after adding `create`.
-- **Good to know:** A companion factory can apply standard initial values; constructor default parameters may be simpler; public methods can state their return type explicitly.
-- **Revisit later:** Invariants with `require`, validation errors as `Either`, controlled constructors, proper automated unit tests, and record identity.
+- **Must know:** `try/catch` returns the value of the completed `try` block or the matching `catch` branch; `assert` checks the resulting Boolean.
+- **Good to know:** An unexpected exception type propagates; `case _: IllegalArgumentException` matches without binding the exception; `assert` can detect when an expected exception never occurred.
+- **Revisit later:** `Try`, `Success`, `Failure`; unit-testing frameworks and `sbt test`; direct `apply` checks if they become useful. No need to rewrite near-identical examples just for repetition.
+
+### Learning approach refined today
+
+Because this learning happens after work, spend hands-on time on **genuinely new insights or design questions**. For very similar cases, provide complete code and explain only what is new. Keep the Dev Log moving without treating repetitive typing as progress.
 
 ### Documentation
 
-- [Scala 3 Book — Companion Objects](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#companion-objects) — companion object naming and the relationship to the class.
-- [Scala 3 Book — Singleton Objects](https://docs.scala-lang.org/scala3/book/taste-objects.html) — why `object` methods do not require a separate instance.
-- [Scala 3 Book — Methods](https://docs.scala-lang.org/scala3/book/taste-methods.html) — methods on classes and objects.
-- [Scala 3 Book — Default Parameter Values](https://docs.scala-lang.org/scala3/book/methods-most.html#default-parameter-values) — an alternative to a factory for an optional initial tag set.
-- [Scala 3 Book — Case Classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes) — generated construction and `copy()` behaviour.
-
-**What to look for:** Identify which call uses an existing `entry`, which call creates a new entry using `DevLogEntry.create(...)`, and which call uses the case class's generated `DevLogEntry(...)`. Notice that a convenient factory does not automatically enforce a rule on every construction path.
+- [Scala 3 Book — `try` / `catch` / `finally`](https://docs.scala-lang.org/scala3/book/control-structures.html#try-catch-finally) — **What to look for:** how `try/catch` forms an expression whose branches return values.
+- [Scala API — `Predef.assert`](https://www.scala-lang.org/api/3.x/scala/Predef$.html) — **What to look for:** what happens when an assertion condition is false.
+- [Scala 3 Book — Building and Testing with sbt](https://docs.scala-lang.org/scala3/book/tools-sbt.html) — **Read later:** how to organise tests outside `Main.scala` and run them using `sbt test`.
 
 ### Suggested Git milestone
 
-After verifying the code locally, commit the companion factory, updated `Main.scala` assertions, and the progress notes with:
-
 ```text
-feat: add companion factory for dev log entries
+test: check title validation with try-catch assertions
 ```
 
-Only record this as committed and pushed after Git confirms it. The earlier Exercise 2 commit is still unconfirmed in the supplied notes; verify Git history rather than assuming it was pushed.
+Commit the updated `../src/main/scala/Main.scala` and `docs/dev-log-progress.md` after local review/verification. Do not record a push or successful run until it is confirmed.
 
 ## 9. Exercise 4 — class invariants with `require` and exception handling (implemented; invalid-title path verified)
 
@@ -646,117 +302,465 @@ feat: validate dev log titles with require
 
 Stage `../src/main/scala/DevLogEntry.scala`, `src/main/scala/Main.scala`, and `docs/dev-log-progress.md` for this milestone. Earlier Exercises 2 and 3 have historical commit suggestions in this note; their Git status still needs checking against actual repository history.
 
-## 10. Exercise 5 — assert an expected exception using a Boolean `try/catch` expression (code prepared and reviewed)
+## 8. Exercise 3 — companion-object factory and assertions (implemented and reviewed)
 
-**Date:** 24 November 2026  
-**Status:** The `Main.scala` example was supplied in the 24 November upload and reviewed against the existing title invariant. **A local `sbt run` result was not supplied for this version**, so its execution remains unverified.  
-**Scope:** A short learning exercise, not a new production feature or a dedicated test suite.
+**Date reviewed:** 18 November 2026  
+**Code review:** Passed for the submitted implementation and updated assertions.  
+**Local verification:** Not confirmed in chat; run `sbt run` and check for `All assertions passed!`.  
+**Commit/push:** Proposed below; not yet confirmed.
 
-### The useful discovery
+### Problem
 
-Previously, the exercise used `try/catch` only to print an exception. Today I learned that **Scala's `try/catch` is an expression that returns a value**. That lets me store the outcome as a `Boolean`, then verify the expected exception using `assert`.
+Create a new Dev Log entry with an empty tag set without making every caller supply `Set.empty[String]`. This lets us compare methods on an existing instance with a method on its companion object.
 
-```scala
-val emptyTitleThrows = try
-  DevLogEntry.create("", "Testing", LocalDate.now())
-  false
-catch
-  case _: IllegalArgumentException => true
-
-assert(emptyTitleThrows)
-```
-
-- **If construction succeeds**, execution reaches `false`. The assertion then fails: the expected exception did not happen.
-- **If construction throws `IllegalArgumentException`**, the matching `catch` evaluates to `true`, so the assertion passes.
-- **If another exception occurs**, this `catch` does not handle it; it propagates rather than being mistaken for a successful test.
-- Scala infers `emptyTitleThrows: Boolean` because the normal and caught paths both produce a Boolean.
-- `_` in the `catch` pattern means the exception is matched by type but its value is not needed.
-
-**Key takeaway:** A `try/catch` can be used to *produce a value*, not just perform side effects. The `false` after the constructor is important: it marks an unexpected success as a failed check.
-
-### Submitted `Main.scala`
-
-The uploaded code checks a valid entry, an empty title, a whitespace-only title, and an invalid `copy`. It also checks that the original entry remains unchanged.
+### Implementation — `DevLogEntry.scala`
 
 ```scala
 import java.time.LocalDate
 
-object Main:
-  def main(args: Array[String]): Unit =
+case class DevLogEntry(
+    title: String,
+    description: String,
+    date: LocalDate,
+    tags: Set[String]
+):
+  def addTag(newTag: String): DevLogEntry =
+    this.copy(tags = this.tags + newTag)
 
+  def removeTag(tag: String): DevLogEntry =
+    this.copy(tags = this.tags - tag)
+
+object DevLogEntry:
+  def create(title: String, description: String, date: LocalDate): DevLogEntry =
+    DevLogEntry(title, description, date, Set.empty[String])
+```
+
+The implementation has an explicit `: DevLogEntry` result type. `create` is on the **companion object** (`object DevLogEntry`), while `addTag` and `removeTag` remain **instance methods**. The factory adds a convenient creation path; it does not disable the case class's generated `apply` constructor.
+
+### Checks — `Main.scala`
+
+My latest exercise solution uses:
+
+```scala
+import java.time.LocalDate
+
+object Main {
+  def main(args: Array[String]): Unit = {
     val entry = DevLogEntry.create(
       "Learning Scala",
-      "Testing validation",
+      "Understanding companion objects",
       LocalDate.now()
     )
 
-    // 1. Valid entry
+    val updated = entry.addTag("Scala")
+
     assert(entry.title == "Learning Scala")
+    assert(entry.description == "Understanding companion objects")
+    assert(entry.tags.isEmpty)
 
-    // 2. Empty title
-    val emptyTitleThrows = try
-      DevLogEntry.create("", "Testing", LocalDate.now())
-      false
-    catch
-      case _: IllegalArgumentException => true
-
-    assert(emptyTitleThrows)
-
-    // 3. Whitespace-only title
-    val whitespaceThrows = try
-      DevLogEntry.create("   ", "Testing", LocalDate.now())
-      false
-    catch
-      case _: IllegalArgumentException => true
-
-    assert(whitespaceThrows)
-
-    // 4. Invalid copy
-    val copyThrows = try
-      entry.copy(title = "")
-      false
-    catch
-      case _: IllegalArgumentException => true
-
-    assert(copyThrows)
-
-    // Original entry remains unchanged
-    assert(entry.title == "Learning Scala")
+    assert(updated.tags == Set("Scala"))
+    assert(entry.tags.isEmpty)
 
     println("All assertions passed!")
+  }
+}
 ```
 
-**Verification boundary:** The example is consistent with our existing `require(title.trim.nonEmpty, ...)` rule, but the latest uploaded `Main.scala` has not been accompanied by an execution result. It does **not** separately check direct `DevLogEntry(...)` construction, and no new testing library has been introduced.
+These checks cover the title, description, initial empty tags, successful addition of a tag, and the original entry remaining unchanged. **They do not yet explicitly assert the date**; if that becomes important, capture `LocalDate.now()` in a variable, pass it to `create`, and assert `entry.date == thatDate`. No local execution result has been reported.
+
+### Design discussion — the trade-off I noticed
+
+> If we know a new Dev Log should start with no tags, the factory saves us from repeatedly passing an empty Set. But our `create` method cannot accept initial tags, so it is less flexible for that use case.
+
+That is correct **for the current `create` signature**. Callers may still use the generated case-class constructor to supply tags directly. An alternative would be to give `tags` a default value in the case-class constructor:
+
+```scala
+case class DevLogEntry(
+    title: String,
+    description: String,
+    date: LocalDate,
+    tags: Set[String] = Set.empty[String]
+)
+```
+
+Default arguments can make the simple creation case more flexible, without a separate custom `create` method. **This was discussed as an alternative; it has not been implemented in the submitted solution.**
+
+### Design discussion — where should validation live?
+
+My answer to the follow-up design question was:
+
+> Put a rule such as "the title must not be empty" in the case class, because a caller can bypass validation in `create` by using the generated case-class `apply` method directly.
+
+This reasoning is sound. With a public case-class constructor, a check only in the factory does not protect every construction path. A possible **future exercise** is a class-body invariant using `require`, such as `require(title.trim.nonEmpty, "Title must not be empty")`, which would run when instances are constructed through the public constructor, generated `apply`, or `copy`. **No validation rule has been added yet.** We should also discuss when throwing an exception is appropriate versus returning a validation result.
 
 ### Must know / Good to know / Revisit later
 
-- **Must know:** `try/catch` returns the value of the completed `try` block or the matching `catch` branch; `assert` checks the resulting Boolean.
-- **Good to know:** An unexpected exception type propagates; `case _: IllegalArgumentException` matches without binding the exception; `assert` can detect when an expected exception never occurred.
-- **Revisit later:** `Try`, `Success`, `Failure`; unit-testing frameworks and `sbt test`; direct `apply` checks if they become useful. No need to rewrite near-identical examples just for repetition.
-
-### Learning approach refined today
-
-Because this learning happens after work, spend hands-on time on **genuinely new insights or design questions**. For very similar cases, provide complete code and explain only what is new. Keep the Dev Log moving without treating repetitive typing as progress.
+- **Must know:** An instance method works on one entry; a companion object is a singleton with the same name as its class, declared alongside it; the case-class constructor remains available even after adding `create`.
+- **Good to know:** A companion factory can apply standard initial values; constructor default parameters may be simpler; public methods can state their return type explicitly.
+- **Revisit later:** Invariants with `require`, validation errors as `Either`, controlled constructors, proper automated unit tests, and record identity.
 
 ### Documentation
 
-- [Scala 3 Book — `try` / `catch` / `finally`](https://docs.scala-lang.org/scala3/book/control-structures.html#try-catch-finally) — **What to look for:** how `try/catch` forms an expression whose branches return values.
-- [Scala API — `Predef.assert`](https://www.scala-lang.org/api/3.x/scala/Predef$.html) — **What to look for:** what happens when an assertion condition is false.
-- [Scala 3 Book — Building and Testing with sbt](https://docs.scala-lang.org/scala3/book/tools-sbt.html) — **Read later:** how to organise tests outside `Main.scala` and run them using `sbt test`.
+- [Scala 3 Book — Companion Objects](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#companion-objects) — companion object naming and the relationship to the class.
+- [Scala 3 Book — Singleton Objects](https://docs.scala-lang.org/scala3/book/taste-objects.html) — why `object` methods do not require a separate instance.
+- [Scala 3 Book — Methods](https://docs.scala-lang.org/scala3/book/taste-methods.html) — methods on classes and objects.
+- [Scala 3 Book — Default Parameter Values](https://docs.scala-lang.org/scala3/book/methods-most.html#default-parameter-values) — an alternative to a factory for an optional initial tag set.
+- [Scala 3 Book — Case Classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes) — generated construction and `copy()` behaviour.
+
+**What to look for:** Identify which call uses an existing `entry`, which call creates a new entry using `DevLogEntry.create(...)`, and which call uses the case class's generated `DevLogEntry(...)`. Notice that a convenient factory does not automatically enforce a rule on every construction path.
 
 ### Suggested Git milestone
 
+After verifying the code locally, commit the companion factory, updated `Main.scala` assertions, and the progress notes with:
+
 ```text
-test: check title validation with try-catch assertions
+feat: add companion factory for dev log entries
 ```
 
-Commit the updated `../src/main/scala/Main.scala` and `docs/dev-log-progress.md` after local review/verification. Do not record a push or successful run until it is confirmed.
+Only record this as committed and pushed after Git confirms it. The earlier Exercise 2 commit is still unconfirmed in the supplied notes; verify Git history rather than assuming it was pushed.
 
-## 11. Next learning direction — not started
+## 7. Exercise 2 — immutable `removeTag` and `assert` checks (completed and reviewed)
 
-Move on to a new concept rather than repeating these checks. A natural candidate is **`Try`, `Success`, and `Failure`**, comparing failures represented as values with the current `try/catch` expression. The dedicated sbt test suite can wait until it becomes useful for the application.
+**Date reviewed:** 17 November 2026  
+**Code review:** Passed; the following was supplied in chat after the ZIP upload.  
+**Verification note:** The assertions are written and reviewed, but a successful local `sbt run` has not been confirmed in chat.  
+**Commit:** Ready to make; not yet confirmed as pushed.
 
-- [Scala API — `Try`](https://www.scala-lang.org/api/3.x/scala/util/Try.html) — **What to look for:** `Try.apply`, `Success`, and `Failure`, and which exceptions are caught.
+### Problem and solution
+
+Remove a tag while preserving the original entry. A nonexistent tag should be harmless; it should leave the set's elements unchanged.
+
+```scala
+def removeTag(tag: String): DevLogEntry =
+  this.copy(tags = this.tags - tag)
+```
+
+- `tags - tag` creates a Set without the specified element; it does not modify the original immutable Set.
+- `copy(tags = ...)` creates a new `DevLogEntry` and preserves `title`, `description` and `date`.
+- Removing a missing tag returns a Set with the same elements; no `if`, `Option` or exception handling is needed for this simple case.
+- Removing the last remaining tag produces `Set.empty[String]`.
+
+`addTag` remains:
+
+```scala
+def addTag(newTag: String): DevLogEntry =
+  this.copy(tags = this.tags + newTag)
+```
+
+### Checking behaviour with `assert` in `Main.scala`
+
+The following is the test example I wrote. It checks the expected results automatically rather than relying only on printed output:
+
+```scala
+import java.time.LocalDate
+
+object Main {
+  def main(args: Array[String]): Unit = {
+    val entry = DevLogEntry(
+      title = "My First Dev Log",
+      description = "Testing development across two Macs",
+      date = LocalDate.now(),
+      tags = Set("Scala", "Git")
+    )
+
+    val updatedEntry = entry.addTag("GitHub")
+    val updated = entry.removeTag("Git")
+    val empty = updated.removeTag("Scala")
+    val unchanged = entry.removeTag("new")
+
+    // Original entry
+    assert(entry.tags == Set("Scala", "Git"))
+
+    // Add a new tag
+    assert(updatedEntry.tags == Set("Scala", "Git", "GitHub"))
+
+    // Remove an existing tag
+    assert(updated.tags == Set("Scala"))
+
+    // Remove the last tag
+    assert(empty.tags == Set.empty[String])
+
+    // Removing a missing tag preserves the value
+    assert(unchanged == entry)
+
+    // Original entry is still unchanged
+    assert(entry.tags == Set("Scala", "Git"))
+
+    println("All assertions passed!")
+  }
+}
+```
+
+### What is `assert`?
+
+`assert(condition)` verifies that a Boolean expression is `true`:
+
+```scala
+assert(updated.tags == Set("Scala"))
+```
+
+- If the condition is `true`, the program continues.
+- If it is `false`, `assert` throws an `AssertionError`; the success message at the end won't be reached.
+- These are useful **manual application checks**, not yet a dedicated automated test suite.
+- The two checks of `entry.tags` are intentionally redundant for learning: they reinforce that operations on copies have not changed the original.
+
+**Local verification to do before committing:** run `sbt run` and confirm the message `All assertions passed!` appears without errors. The chat review alone does not prove the code was executed.
+
+### Explanation in my own words
+
+> `entry.removeTag("Git")` returns a new copy with one fewer tag. The original `entry` is not modified. `val` prevents reassignment, while the immutable Set and the `copy()` operation are what give this example its immutable update behaviour.
+
+### Documentation
+
+- [Scala 3 Book — Deleting elements from a Set](https://docs.scala-lang.org/scala3/book/collections-classes.html#deleting-elements-from-a-set) — the `-` operation and Set behaviour.
+- [Scala 3 Book — Immutable Values](https://docs.scala-lang.org/scala3/book/fp-immutable-values.html) — creating updated copies without modifying the original.
+- [Scala 3 Book — Building and Testing with sbt](https://docs.scala-lang.org/scala3/book/tools-sbt.html) — examples of assertions in a test workflow and the next step beyond checks in `Main`.
+
+**What to look for:** Why `-` does not mutate an immutable Set; why `copy()` returns a new case-class instance; what `assert` does if a condition is false.
+
+### Commit milestone
+
+Planned commit message:
+
+```text
+feat: add immutable tag removal to DevLogEntry
+```
+
+Include the implementation, `Main.scala` checks and this progress note in the commit. Do not mark the commit as pushed until Git confirms it.
+
+## 6. What to learn now vs later
+
+### Must know
+
+- What a `case class` provides automatically.
+- How value equality (`==`) works for case classes.
+- Why `copy()` plus immutable collections leaves the original unchanged.
+- How `Set` operators `+` (add) and `-` (remove) produce updated immutable collections.
+- The distinction between `val` and an immutable object or collection.
+- How simple `assert` checks verify expected behaviour and fail with `AssertionError` when a condition is false.
+- The difference between an **instance method** (`entry.addTag`) and a method on an **object** (`DevLogService.addTag`).
+- What `this` means inside an instance method.
+- The distinction between an instance method, singleton object, and companion object.
+- Why validation only inside a factory can be bypassed by another public construction path.
+
+### Good to know
+
+- Why `Set` is useful when duplicate tags are not wanted.
+- Why explicit return types improve method readability.
+- How methods can delegate to one another without duplicating logic.
+- Why behaviour working solely on an entry's data may belong on the entry itself.
+- Why a companion factory can supply default values and why constructor defaults may sometimes be simpler.
+- How Scala 3 infers a return type, and why an explicit return type on a public method can help readers.
+
+### Revisit later
+
+- Value equality vs persistent record identity and unique IDs.
+- Factories that enforce construction rules, and alternative ways of designing creation APIs.
+- Services, repositories and dependency injection.
+- Traits, composition and abstraction boundaries.
+- A dedicated test suite (for example, using a Scala testing framework) and validation rules (for example, empty titles).
+
+## 5. Moving behaviour into the model — implemented
+
+I implemented `addTag` inside `DevLogEntry`:
+
+```scala
+import java.time.LocalDate
+
+case class DevLogEntry(
+    title: String,
+    description: String,
+    date: LocalDate,
+    tags: Set[String]
+):
+  def addTag(newTag: String): DevLogEntry =
+    this.copy(tags = this.tags + newTag)
+```
+
+The explicit `: DevLogEntry` return type is a clarity improvement suggested during review; my original implementation relied on Scala's return-type inference.
+
+Usage:
+
+```scala
+val withGitHub = entry.addTag("GitHub")
+val stillOneGitHub = withGitHub.addTag("GitHub")
+```
+
+Because `tags` is a `Set`, adding the same string twice does not create a duplicate. The original `entry` is unchanged.
+
+### Case-class method vs service object
+
+We considered two designs:
+
+```scala
+// Approach A: behaviour on an instance
+entry.addTag("GitHub")
+
+// Approach B: behaviour in a separate singleton object
+DevLogService.addTag(entry, "GitHub")
+```
+
+An example implementation of Approach B is:
+
+```scala
+object DevLogService {
+  def addTag(entry: DevLogEntry, newTag: String): DevLogEntry =
+    entry.addTag(newTag)
+}
+```
+
+**Decision for now:** Keep simple behaviour that only transforms the entry's own data in `DevLogEntry`. A service becomes more useful when an operation coordinates external dependencies or other responsibilities, for example saving an entry to a database. Just needing a `DevLogEntry` argument does *not*, by itself, prove that the method must be on the class.
+
+**Status clarification:** `DevLogService.scala` is present in the uploaded project ZIP, and it delegates to `entry.addTag(newTag)`. We can keep it as an example of a separate singleton object, but it is not required for this simple operation.
+
+### Related documentation
+
+- [Scala 3 Book — Methods](https://docs.scala-lang.org/scala3/book/taste-methods.html) — methods inside case classes and other types.
+- [Scala 3 Book — Fields and methods](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#fields-and-methods) — instance behaviour in a class body.
+- [Scala 3 Book — Singleton Objects](https://docs.scala-lang.org/scala3/book/taste-objects.html) — the alternative of placing methods in an `object`.
+
+**What to look for:** Where a method can be declared and how an instance method differs from a method in a singleton object. Keeping `addTag` on `DevLogEntry` is **our design decision**, not a rule imposed by these docs.
+
+## 4. Immutability and `copy()` — completed experiment
+
+We experimented with:
+
+```scala
+val updatedEntry = entry.copy(
+  tags = entry.tags + "GitHub"
+)
+```
+
+Correct predictions:
+
+- `entry.tags` stays unchanged.
+- `updatedEntry.tags` includes the extra tag.
+- `entry == updatedEntry` is `false` when their tags differ.
+
+**Lesson:** Immutability does not mean the application cannot represent changes. Instead of changing an existing value, we create a new value with the updated state.
+
+**`val` clarification (17 November 2026):** `val entry` prevents assigning a different value to the variable `entry`, but `val` alone does not make a referenced object deeply immutable. Here, case-class parameters are `val` by default, `tags` is an immutable `Set[String]`, and `copy()` creates a new entry rather than changing the existing one.
+
+### Related documentation
+
+- [Scala 3 Book — Immutable Values](https://docs.scala-lang.org/scala3/book/fp-immutable-values.html) — case classes and the “update as you copy” pattern.
+- [Scala 3 Book — Adding elements to a Set](https://docs.scala-lang.org/scala3/book/collections-classes.html#adding-elements-to-a-set) — returning a new immutable collection with `+`.
+
+**What to look for:** Which value is unchanged after `copy()`, and which operation produces a new `Set`?
+
+## 3. First data model — completed
+
+Created `DevLogEntry.scala`:
+
+```scala
+import java.time.LocalDate
+
+case class DevLogEntry(
+    title: String,
+    description: String,
+    date: LocalDate,
+    tags: Set[String]
+)
+```
+
+This describes a development-log entry using four fields:
+
+- `title` and `description`: `String`
+- `date`: `LocalDate`, rather than an arbitrary date string
+- `tags`: immutable `Set[String]`, which prevents duplicate values
+
+We created entries in `Main.scala`, printed them, and used Git to push the initial model. The commit was:
+
+```text
+feat: add initial dev log entry model
+```
+
+We also tested working with the repository across two Macs.
+
+### Why a case class?
+
+A case class is a useful default for this value-oriented model because it provides:
+
+1. Construction without `new`.
+2. Equality based on constructor field values.
+3. Immutable constructor fields (`val`) by default.
+4. `copy()` to create modified instances.
+5. Readable `toString` output.
+
+A regular `class` can be appropriate for other kinds of objects, but these features are not all supplied automatically in the same way.
+
+**Important future distinction:** Two entries with identical fields compare equal as case-class values, but they might eventually be two distinct saved records. We will revisit **value equality vs record identity** when introducing IDs and persistence.
+
+### Related documentation
+
+- [Scala 3 Book — Case Classes](https://docs.scala-lang.org/scala3/book/domain-modeling-tools.html#case-classes) — generated methods, equality, `copy()` and constructor fields.
+- [Scala 3 Book — Working with Sets](https://docs.scala-lang.org/scala3/book/collections-classes.html#working-with-sets) — why `Set` stores unique elements.
+
+**What to look for:** Identify which case-class features Scala generates for us, and why `tags` is a `Set[String]` rather than a `List[String]`.
+
+## 2. Project setup — completed
+
+- Created the GitHub repository `dev-log` and opened the local directory with IntelliJ IDEA.
+- Learned that `../.idea` is IntelliJ's project configuration directory, not application source code.
+- Set up a simple **sbt + Scala 3** console application. Our original setup used `scalaVersion := "3.9.0"` in `../build.sbt` and `sbt.version=2.0.11` in `../project/build.properties` (these were the versions used in the setup exercise; check the files for their current values).
+- Created `../src/main/scala/Main.scala` and successfully ran `sbt run`, which printed `Dev Log started`.
+- Learned that sbt / IntelliJ may create generated directories such as `../project/project`, `../target` and `.bsp/`. They are not where application code goes.
+- Added `../.gitignore` to exclude local IDE settings and generated build outputs.
+- Committed and pushed the initial setup:
+
+```text
+chore: initialise Scala dev log project
+```
+
+Key files:
+
+```text
+dev-log/
+├── .gitignore
+├── build.sbt
+├── project/
+│   └── build.properties
+└── src/
+    └── main/
+        └── scala/
+            ├── Main.scala
+            ├── DevLogEntry.scala
+            └── DevLogService.scala
+```
+
+The `../src/test/scala` directory can be added or used when we begin unit testing. Empty directories do not appear in Git commits.
+
+### Related documentation
+
+- [The Book of sbt — Getting Started](https://www.scala-sbt.org/2.x/docs/en/guide/index.html) — sbt project structure, build definitions and commands.
+- [Scala 3 Book — Main Methods](https://docs.scala-lang.org/scala3/book/methods-main-methods.html) — how a Scala program starts.
+
+**What to look for:** How `../build.sbt`, `project/build.properties` and the application's entry point have different jobs.
+
+## 1. Our development approach
+
+This project is both an application and a learning experiment. I write and run the code; AI helps me reason about design, review decisions and explore alternatives. Initially, AI does not need terminal access.
+
+For each small feature, follow this cycle:
+
+1. Define the problem and its requirements.
+2. Think about the design before coding.
+3. Implement it myself.
+4. Test and review it, comparing alternatives.
+5. Commit a meaningful milestone and record what I learned.
+
+For **every exercise**, keep the relevant documentation links next to the exercise (not only in a reference list at the end). Include a brief **“What to look for”** note so I can return to the source and find the concept independently. Prefer the official Scala 3 Book and link to a specific section whenever possible; use official tool documentation for setup exercises. Only record an implementation as complete after I have written and checked it. Distinguish a code-review pass from a build or test run that has been verified locally.
+
+We use four recurring design questions:
+
+| Foundation | Question |
+| --- | --- |
+| **Case class vs class** | How should we model data? |
+| **Object vs class** | Where should behaviour live? |
+| **Trait vs inheritance/composition** | How do we design for change? |
+| **Collections** | How should we organise data? |
+
+We will return to these questions as the application develops rather than treating them as isolated lessons.
 
 ## 12. Official Scala documentation — quick reference
 
@@ -768,7 +772,3 @@ Move on to a new concept rather than repeating these checks. A natural candidate
 - [Scala 3 API — `Predef`](https://www.scala-lang.org/api/3.x/scala/Predef$.html)
 
 **How to use these docs:** Begin with the direct documentation links and “What to look for” prompts for the current exercise. Return to this quick list for broader reference.
-
----
-
-**Current position (24 November 2026):** The Scala 3 model, immutable tag operations and companion `create()` factory are implemented. Exercise 4 introduced the title invariant and verified the invalid-title exception flow locally on 23 November. Exercise 5 adds a supplied `Main.scala` example showing how `try/catch` returns a Boolean that `assert` can check, including whitespace and invalid-copy cases. This latest version has been reviewed but **not confirmed executed**. Next concept: `Try` / `Success` / `Failure`; sbt-based unit tests can be studied later. Commit and push status for Exercise 5 remain unconfirmed.
